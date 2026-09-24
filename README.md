@@ -1,6 +1,5 @@
 # Homelab — GitOps Kubernetes Cluster
 
-[![tag](https://img.shields.io/github/v/tag/utkdwivedi/homelab?style=flat-square&logo=semver&logoColor=white)](https://github.com/utkdwivedi/homelab/tags)
 [![document](https://img.shields.io/website?label=document&logo=gitbook&logoColor=white&style=flat-square&url=https%3A%2F%2Fhomelab.khuedoan.com)](https://homelab.khuedoan.com)
 [![license](https://img.shields.io/github/license/utkdwivedi/homelab?style=flat-square&logo=gnu&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![stars](https://img.shields.io/github/stars/utkdwivedi/homelab?logo=github&logoColor=white&color=gold&style=flat-square)](https://github.com/utkdwivedi/homelab)
