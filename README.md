@@ -182,47 +182,65 @@ flowchart TD
 
 ---
 
-## Tooling & Tech Stack
+## Tooling overview
 
-### Core Infrastructure
-| Tool | Purpose |
-|------|---------|
-| **Fedora Linux** | Host OS and VM base image |
-| **QEMU / KVM** | Type-1 hypervisor for lightweight virtualization |
-| **K3s** | Lightweight certified Kubernetes distribution |
-| **Cilium** | eBPF-based CNI providing L2 load balancing and network routing |
-| **FluxCD** | Declarative GitOps continuous reconciliation engine |
-| **Terraform** | Declarative VM provisioning via libvirt |
-| **Ansible** | Automated host configuration and post-provisioning orchestration |
-| **SOPS + Age** | Encryption for GitOps secrets stored safely in version control |
+### Hardware
+| Logo | Device | Role |
+|:-:|-----|-------------|
+| ![Lenovo](https://cdn.simpleicons.org/lenovo?size=32) | Lenovo Thinkpad T14 Gen 1 | Production |
+| ![Lenovo](https://cdn.simpleicons.org/lenovo?size=32) | Lenovo Thinkcentre M700 | Staging |
+| ![HP](https://cdn.simpleicons.org/hp?size=32) | HP EliteDesk 800 G2 SFF 2x1TB WD Red | NAS |
+| ![Lenovo](https://cdn.simpleicons.org/lenovo?size=32) | Lenovo Legion 5 Slim | Workstation |
 
-### Observability & Security
-| Tool | Purpose |
-|------|---------|
-| **Prometheus** | Metrics collection, storage, and alerting |
-| **Grafana** | Unified observability visualization |
-| **AlertManager** | Alert deduplication and notification delivery |
-| **Kyverno** | Kubernetes native policy-as-code management |
-| **Cloudflare Tunnel** | Encrypted zero-trust ingress without public static IPs |
+### Infrastructure
+| Logo | Name | Description |
+|:-:|-----|-------------|
+| ![Fedora](https://cdn.simpleicons.org/fedora?size=32) | Fedora | Linux Distribution used on Host, VMs and Workstation |
+| ![TrueNAS](https://cdn.simpleicons.org/truenas?size=32) | TrueNAS | Open-source unified storage operating system based on OpenZFS |
+| ![QEMU](https://cdn.simpleicons.org/qemu?size=32) | QEMU/KVM | Hypervisor for running virtual machines |
+| ![K3s](https://cdn.simpleicons.org/k3s?size=32) | K3s | Lightweight Kubernetes engine |
+| ![FluxCD](https://cdn.simpleicons.org/flux?size=32) | FluxCD | GitOps tool for managing Kubernetes declaratively |
+| ![Terraform](https://cdn.simpleicons.org/terraform?size=32) | Terraform | IaC tool for provisioning infrastructure declaratively |
+| ![Ansible](https://cdn.simpleicons.org/ansible/f00?size=32) | Ansible | Automation tool for post-provisioning configuration and orchestration |
+| ![SOPS](https://cdn.simpleicons.org/privateinternetaccess/000?size=32) | SOPS | Secret OPerationS - tool for managing secrets |
+| ![Cilium](https://cdn.simpleicons.org/cilium/size=32) | Cilium | Solution for providing, securing, and observing network connectivity |
+| <img src="https://raw.githubusercontent.com/kyverno/artwork/5be18d691ae2b42beb898ffc1312024975749bd8/Kyverno.svg" width="32" height="32" /> | Kyverno | Unified Policy as Code solution |
+| <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/cloudflare-zero-trust.png" width="32" height="32" />  | Cloudflare | Zero-Trust Tunnel for exposing services securely on a the internet |
 
-### Applications
-| Service | Purpose | URL Route |
-|---------|---------|-----------|
-| **Jellyfin** | Personal media streaming | `jellyfin.utkdwivedi.com` |
-| **SilverBullet** | Markdown knowledge base | `notes.utkdwivedi.com` |
-| **Karakeep** | Self-hosted bookmarks & MeiliSearch | `karakeep.utkdwivedi.com` |
 
----
 
-## Storage & Backup Strategy
+### Monitoring
+| Logo | Name | Description |
+|:-:|-----|-------------|
+| ![Prometheus](https://cdn.simpleicons.org/prometheus?size=32) | Prometheus | Scrapes infrastructure metrics for visualization in Grafana |
+| ![AlertManager](https://cdn.simpleicons.org/prometheus/f51d1d?size=32) | AlertManager | Sends notifications and alerts based on Prometheus metrics |
+| ![Grafana](https://cdn.simpleicons.org/grafana?size=32) | Grafana | Dashboard and visualization for metrics collected by Prometheus |
+| ![kube-state-metrics](https://cdn.simpleicons.org/cncf/5EC5EB?size=32) | kube-state-metrics | Exposes Kubernetes cluster-level metrics for Prometheus |
+| ![node-exporter](https://cdn.simpleicons.org/prometheus?size=32) | node-exporter | Collects host-level metrics for Prometheus |
+| ![K9s](https://cdn.simpleicons.org/kubernetes?size=32) | k9s | CLI tool to interactively view Kubernetes resources |
+| ![K9s](https://cdn.simpleicons.org/uptimekuma?size=32) | Uptime Kuma | Alternative monitoring running as TrueNAS App |
 
-The cluster adheres to a **3-2-1 backup model**:
-- **Primary Local Storage**: TrueNAS ZFS mirror pool over NFS (`192.168.0.104`).
-- **Secondary Local Backup**: Periodic snapshots replicated to secondary external storage.
-- **Offsite Backup**: Critical datasets synced offsite to cloud object storage.
-- **Code & Configuration**: Entire cluster topology is version-controlled in Git.
+### Services
+| Logo | Name | Description |
+|:-:|-----|-------------|
+| ![Jellyfin](https://cdn.simpleicons.org/jellyfin?size=32) | Jellyfin | Media streaming service | 
+| <img src="https://repository-images.githubusercontent.com/459944886/a6e61d23-9090-4cc4-946d-c5d9c189240f" width="32" height="32" /> | SilverBullet.md | Programmable browser-based Markdown editor |
+| ![Karakeep](https://cdn.simpleicons.org/karakeep?size=32) | Karakeep | Bookmark manager | 
 
----
+
+### Backup Strategy
+
+The homelab follows a **3-2-1 backup strategy**:
+
+| Logo | Name | Description |
+|:-:|-----|-------------|
+| ![TrueNAS](https://cdn.simpleicons.org/truenas?size=32) | TrueNAS | Primary local storage - 2x 1TB WD Red ZFS mirror |
+| <img src="https://images.icon-icons.com/61/PNG/128/lightbrown_external_drive_usb_folder_12286.png" width="32" height="32" /> | External SSD | Secondary local copy for critical data |
+| ![Backblaze](https://cdn.simpleicons.org/backblaze?size=32) | Backblaze B2 | Offsite cloud storage via TrueNAS Cloud Sync |
+
+>[!TIP]
+> Infrastructure configs and other version-controlled assets also live on GitHub, adding a fourth copy for the most critical data.
+
 
 ## License
 
