@@ -1,0 +1,24 @@
+- name: Apply common configuration to all VMs
+  hosts: vms
+  roles:
+    - common
+    - nfs
+
+- name: Setup K3s Master
+  hosts: k3s_server
+  become: true
+  roles:
+    - k3s_master
+    - k3s_kubeconfig
+
+- name: Join K3s Workers
+  hosts: k3s_agents
+  become: true
+  roles:
+    - k3s_agent
+
+- name: Bootstrap Flux
+  hosts: k3s_server
+  become: true
+  roles:
+    - flux
