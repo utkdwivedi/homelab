@@ -1,0 +1,46 @@
+- name: Ensure NetworkManager is installed and running
+  ansible.builtin.dnf:
+    name: NetworkManager
+    state: present
+  become: true
+
+- name: Enable and start NetworkManager
+  ansible.builtin.systemd:
+    name: NetworkManager
+    enabled: true
+    state: started
+  become: true
+
+- name: Detect active interface
+  set_fact:
+    bridge_if: "{{ ansible_default_ipv4.interface }}"
+
+- name: Create bridge connection br0
+  ansible.builtin.command:
+    cmd: nmcli connection add type bridge ifname br0 con-name br0 ipv4.method auto ipv6.method ignore
+  become: true
+  register: br0_create
+  failed_when: br0_create.rc != 0 and "already exists" not in br0_create.stderr
+  changed_when: br0_create.rc == 0
+
+- name: Add bridge slave (physical interface -> br0)
+  ansible.builtin.command:
+    cmd: nmcli connection add type ethernet slave-type bridge ifname {{ bridge_if }} master br0 con-name br0-slave-{{ bridge_if }}
+  become: true
+  register: slave_create
+  failed_when: slave_create.rc != 0 and "already exists" not in slave_create.stderr
+  changed_when: slave_create.rc == 0
+
+- name: Bring up bridge
+  ansible.builtin.command:
+    cmd: nmcli connection up br0
+  become: true
+  register: br0_up
+  failed_when: br0_up.rc != 0 and "already active" not in br0_up.stderr
+
+- name: Bring up bridge slave
+  ansible.builtin.command:
+    cmd: nmcli connection up br0-slave-{{ bridge_if }}
+  become: true
+  register: slave_up
+  failed_when: slave_up.rc != 0 and "already active" not in slave_up.stderr
