@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Build every Kustomize overlay and validate the result.
+# Secrets are skipped in the schema check: SOPS adds a top-level `sops:` field that the Secret schema rejects
+# (scripts/check-sops.sh verifies those files separately).
 # Needs: kustomize (or kubectl), and optionally kubeconform for schema checks.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -27,7 +29,7 @@ for dir in clusters/production clusters/staging \
     continue
   fi
   if command -v kubeconform > /dev/null; then
-    printf '%s\n' "$out" | kubeconform -strict -ignore-missing-schemas -summary \
+    printf '%s\n' "$out" | kubeconform -strict -ignore-missing-schemas -summary -skip Secret \
       -schema-location default \
       -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' || status=1
   fi
