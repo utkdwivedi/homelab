@@ -1,0 +1,8 @@
+---
+profile: moderate
+exclude_paths:
+  - inventory/group_vars/all/secrets.yml
+  - .github/
+skip_list:
+  - yaml[line-length]
+  - var-naming[no-role-prefix]

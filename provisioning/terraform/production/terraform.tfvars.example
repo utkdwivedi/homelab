@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (gitignored) and fill in. No passwords: VM login is SSH-key only.
+host_ip    = "192.168.x.x"   # production virtualization host
+ssh_keys   = ["ssh-ed25519 AAAA... you@workstation"]
+base_image = "/var/lib/libvirt/images/Fedora-Cloud-Base-Generic.x86_64.qcow2"  # pin the release you download
+
+# Optional overrides (defaults shown)
+# node_count   = 4   # node 0 = K3s server, the rest = agents
+# vm_memory    = 4096
+# vm_vcpu      = 2
+# disk_size_gb = 40

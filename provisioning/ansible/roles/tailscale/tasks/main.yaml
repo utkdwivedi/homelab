@@ -1,0 +1,20 @@
+---
+- name: Add the Tailscale package repository
+  become: true
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/fedora/tailscale.repo
+    dest: /etc/yum.repos.d/tailscale.repo
+    mode: "0644"
+
+- name: Install Tailscale
+  become: true
+  ansible.builtin.dnf:
+    name: tailscale
+    state: present
+
+- name: Ensure the Tailscale service is enabled and started
+  become: true
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: true
+    state: started

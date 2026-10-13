@@ -1,0 +1,11 @@
+---
+run_system_update: true
+run_firmware_update: true
+virtualization: true
+
+# Absolute path of the repository root (this file lives in provisioning/ansible/inventory/group_vars/all).
+repo_root: "{{ playbook_dir | dirname | dirname | dirname }}"
+
+# Optional pins. Leave k3s_version empty to install the current stable release.
+k3s_version: ""
+cilium_chart_version: "1.15.1"

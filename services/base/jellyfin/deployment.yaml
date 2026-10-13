@@ -18,7 +18,7 @@ spec:
       containers:
         - name: jellyfin
           image: jellyfin/jellyfin:10.11.8
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           resources:
             requests:
               cpu: 10m
@@ -32,7 +32,7 @@ spec:
               path: /health
               port: 8096
             initialDelaySeconds: 90
-            periodSeconds: 30  
+            periodSeconds: 30
           env:
             - name: PUID
               value: "1000"

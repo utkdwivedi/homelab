@@ -1,0 +1,25 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.tfvars.example
+
+# Secrets and credentials (never commit)
+*_kubeconfig.yaml
+.vault_pass
+*.agekey
+key.txt
+age.key
+.env
+
+# Ansible
+*.retry
+
+# Editors / OS / tooling
+.DS_Store
+.idea/
+.vscode/
+.venv/
+__pycache__/

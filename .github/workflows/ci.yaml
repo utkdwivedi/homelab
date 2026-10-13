@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets-and-yaml:
+    name: Secrets, YAML and Kustomize references
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install yamllint pyyaml
+      - name: Secrets are encrypted
+        run: ./scripts/check-sops.sh
+      - name: yamllint
+        run: yamllint .
+      - name: Kustomize references exist
+        run: python3 scripts/check_kustomize_refs.py
+      - name: Scan history for leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  kubernetes:
+    name: Build and validate manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize and kubeconform
+        uses: yokawasa/action-setup-kube-tools@v0.11.2
+        with:
+          setup-tools: |
+            kubectl
+            kustomize
+            kubeconform
+          kustomize: "5.4.3"
+          kubeconform: "0.6.7"
+      - name: Build every overlay
+        run: ./scripts/validate.sh
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [production, staging]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive provisioning/terraform
+      - name: validate
+        working-directory: provisioning/terraform/${{ matrix.env }}
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+  ansible:
+    name: Ansible
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ansible-core ansible-lint
+      - working-directory: provisioning/ansible
+        run: ansible-galaxy collection install -r requirements.yml
+      - name: ansible-lint
+        working-directory: provisioning/ansible
+        # The vault is encrypted, so point Ansible at an empty inventory for linting.
+        env:
+          ANSIBLE_INVENTORY: /dev/null
+        run: ansible-lint

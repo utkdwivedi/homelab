@@ -19,7 +19,7 @@ spec:
         runAsGroup: 65534
       initContainers:
         - name: fix-permissions
-          image: busybox
+          image: busybox:1.37.0
           command: ["sh", "-c", "chown -R 65534:65534 /prometheus"]
           securityContext:
             runAsUser: 0
