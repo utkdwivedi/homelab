@@ -1,0 +1,7 @@
+terraform 1.9.8
+kubectl 1.31.2
+kustomize 5.4.3
+sops 3.9.1
+age 1.2.0
+fluxcd 2.7.5
+python 3.12.7

@@ -7,13 +7,20 @@ data:
   alertmanager.yml: |
     global:
       resolve_timeout: 5m
-    
+
     route:
-      group_by: ['alertname', 'cluster']
-      group_wait: 10s
-      group_interval: 10s
+      group_by: ['alertname', 'namespace']
+      group_wait: 30s
+      group_interval: 5m
       repeat_interval: 12h
       receiver: 'default'
-    
+
     receivers:
+      # No notifications leave the cluster until a receiver is configured.
+      # Example (ntfy, Discord and Telegram also work via webhook_configs):
+      #   - name: 'default'
+      #     webhook_configs:
+      #       - url: 'https://ntfy.sh/<your-private-topic>'
+      #         send_resolved: true
+      # Keep real URLs out of Git: move this file into a SOPS-encrypted Secret.
       - name: 'default'

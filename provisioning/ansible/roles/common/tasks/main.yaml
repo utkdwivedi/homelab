@@ -1,0 +1,43 @@
+---
+- name: Update all packages to the latest version
+  become: true
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_cache: true
+
+- name: Install essential tools
+  become: true
+  ansible.builtin.dnf:
+    name:
+      - dnf-utils
+      - vim
+      - git
+      - curl
+      - htop
+      - tar
+    state: present
+
+- name: Check if a reboot is required
+  become: true
+  ansible.builtin.command: needs-restarting -r
+  register: reboot_required
+  failed_when: reboot_required.rc not in [0, 1]
+  changed_when: false
+
+- name: Reboot node if required
+  become: true
+  ansible.builtin.reboot:
+    msg: "Rebooting to apply updates"
+  when: reboot_required.rc == 1
+
+- name: Stop and disable firewalld (K3s and Cilium manage their own rules)
+  become: true
+  ansible.builtin.systemd:
+    name: firewalld
+    state: stopped
+    enabled: false
+  register: firewalld_result
+  failed_when:
+    - firewalld_result.failed
+    - "'Could not find the requested service' not in (firewalld_result.msg | default(''))"

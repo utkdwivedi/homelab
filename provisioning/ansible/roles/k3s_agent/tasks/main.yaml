@@ -1,0 +1,17 @@
+---
+- name: Download the K3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /usr/local/share/k3s-install.sh
+    mode: "0755"
+
+- name: Install K3s agent and join the cluster
+  ansible.builtin.command:
+    cmd: /usr/local/share/k3s-install.sh agent
+  environment:
+    K3S_URL: "https://{{ hostvars[groups['k3s_server'][0]]['ansible_host'] }}:6443"
+    K3S_TOKEN: "{{ hostvars[groups['k3s_server'][0]]['k3s_token'] }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+  args:
+    creates: /usr/local/bin/k3s
+  no_log: true

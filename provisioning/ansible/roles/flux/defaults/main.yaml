@@ -1,0 +1,5 @@
+---
+flux_kubeconfig: /etc/rancher/k3s/k3s.yaml
+flux_github_username: utkdwivedi
+flux_manifests_dir: "{{ repo_root }}/clusters/{{ kubeconfig_env }}/flux-system"
+flux_remote_dir: /root/flux-bootstrap

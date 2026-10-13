@@ -1,0 +1,82 @@
+---
+- name: Ensure NetworkManager is installed
+  become: true
+  ansible.builtin.dnf:
+    name: NetworkManager
+    state: present
+
+- name: Enable and start NetworkManager
+  become: true
+  ansible.builtin.systemd:
+    name: NetworkManager
+    enabled: true
+    state: started
+
+- name: List existing NetworkManager connections
+  become: true
+  ansible.builtin.command: nmcli --terse --fields NAME connection show
+  register: nm_connections
+  changed_when: false
+
+# On a re-run the default interface is already br0, so everything below is skipped.
+- name: Create the bridge on the first run only
+  when: "'br0' not in nm_connections.stdout_lines"
+  become: true
+  vars:
+    bridge_uplink: "{{ bridge_uplink_interface | default(ansible_default_ipv4.interface) }}"
+  block:
+    - name: Create bridge connection br0 (clones the uplink MAC so DHCP keeps the same IP)
+      ansible.builtin.command:
+        argv:
+          - nmcli
+          - connection
+          - add
+          - type
+          - bridge
+          - ifname
+          - br0
+          - con-name
+          - br0
+          - bridge.stp
+          - "no"
+          - ipv4.method
+          - auto
+          - ipv6.method
+          - ignore
+          - ethernet.cloned-mac-address
+          - "{{ ansible_default_ipv4.macaddress }}"
+      changed_when: true
+
+    - name: Attach the uplink interface to br0
+      ansible.builtin.command:
+        argv:
+          - nmcli
+          - connection
+          - add
+          - type
+          - ethernet
+          - slave-type
+          - bridge
+          - ifname
+          - "{{ bridge_uplink }}"
+          - master
+          - br0
+          - con-name
+          - "br0-slave-{{ bridge_uplink }}"
+      changed_when: true
+
+    # Activating the bridge moves the IP off the uplink and drops the SSH session,
+    # so run it in the background and wait for the host to come back.
+    - name: Activate the bridge and its uplink
+      ansible.builtin.shell: >-
+        nmcli connection up br0-slave-{{ bridge_uplink }} &&
+        nmcli connection up br0
+      async: 60
+      poll: 0
+      changed_when: true
+
+    - name: Wait for the host to come back
+      become: false
+      ansible.builtin.wait_for_connection:
+        delay: 15
+        timeout: 180

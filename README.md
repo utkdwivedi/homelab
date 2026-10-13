@@ -1,247 +1,134 @@
-# Homelab — GitOps Kubernetes Cluster
+# Homelab: GitOps Kubernetes cluster
 
-[![document](https://img.shields.io/website?label=document&logo=gitbook&logoColor=white&style=flat-square&url=https%3A%2F%2Fhomelab.khuedoan.com)](https://homelab.khuedoan.com)
-[![license](https://img.shields.io/github/license/utkdwivedi/homelab?style=flat-square&logo=gnu&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0.html)
-[![stars](https://img.shields.io/github/stars/utkdwivedi/homelab?logo=github&logoColor=white&color=gold&style=flat-square)](https://github.com/utkdwivedi/homelab)
+[![CI](https://github.com/utkdwivedi/homelab/actions/workflows/ci.yaml/badge.svg)](https://github.com/utkdwivedi/homelab/actions/workflows/ci.yaml)
+[![License: MIT](https://img.shields.io/github/license/utkdwivedi/homelab?style=flat-square)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/utkdwivedi/homelab?style=flat-square)](https://github.com/utkdwivedi/homelab/commits/main)
 
-An automated, declarative **K3s Kubernetes homelab** running self-hosted services with end-to-end Infrastructure as Code (IaC) and GitOps reconciliation.
+A declarative **K3s** homelab: Terraform creates the VMs, Ansible installs Kubernetes and Cilium, and **Flux** reconciles everything else from this repository. Secrets are encrypted with SOPS (age) and Ansible Vault.
 
-Maintained by **Utkarsh Dwivedi** ([@utkdwivedi](https://github.com/utkdwivedi)).
+Maintained by [Utkarsh Dwivedi](https://github.com/utkdwivedi).
 
----
+## What is in here
 
-## Overview
-
-This repository automates the entire lifecycle of a production-grade homelab cluster:
-- **Bare-metal & Virtualization**: Host provisioning with Fedora, KVM/QEMU, and libvirt.
-- **Infrastructure as Code**: Terraform module to spin up bridged Fedora Cloud VMs with cloud-init.
-- **Configuration Management**: Ansible playbooks for system hardening, K3s installation, Cilium CNI bootstrapping, and storage configuration.
-- **GitOps Continuous Delivery**: FluxCD controllers reconciling cluster state directly from this Git repository.
-- **Observability**: Complete monitoring stack with Prometheus, Grafana, AlertManager, kube-state-metrics, and node-exporter.
-- **Policy Enforcement**: Kyverno validating policies for resource boundaries.
-- **Encrypted Secrets**: SOPS + age encryption integrated directly with FluxCD and Ansible Vault.
-- **Zero-Trust Access**: Cloudflare Tunnel for secure external connectivity without opening firewall ports.
-
----
+| Layer | Tooling | Where |
+| --- | --- | --- |
+| Host and VMs | Fedora, KVM/libvirt, Terraform (`dmacvicar/libvirt`), cloud-init | `provisioning/terraform/`, `provisioning/ansible/roles/{virtualization,bridge}` |
+| Kubernetes | K3s (no flannel, no kube-proxy, no Traefik, no ServiceLB), Cilium CNI with L2 announcements | `provisioning/ansible/roles/k3s_*` |
+| GitOps | Flux (source, kustomize, helm, notification controllers) | `clusters/` |
+| Platform | Namespaces, NFS storage classes, Cilium IP pool, Cloudflare Tunnel, Kyverno | `infrastructure/` |
+| Observability | Prometheus (with alert rules), Alertmanager, Grafana, kube-state-metrics, node-exporter | `monitoring/` |
+| Policy | Kyverno `ValidatingPolicy` resources (audit mode) | `policies/` |
+| Apps | Jellyfin, Karakeep, SilverBullet | `services/` |
+| Secrets | SOPS + age for manifests, Ansible Vault for bootstrap secrets | `.sops.yaml`, `provisioning/ansible/inventory/group_vars/` |
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Hardware ["Hardware Layer"]
-        Host["Linux Host (Fedora + KVM/QEMU)"]
-        NAS["NAS Storage (TrueNAS / NFS: 192.168.0.104)"]
-        WS["Admin Workstation"]
+    WS["Admin workstation"] -->|"make apply / make provision"| TF & ANS
+    subgraph Host["Fedora host (KVM + br0 bridge)"]
+        TF["Terraform"] -->|"creates VMs"| VMs["k3s-node-0 (server), k3s-node-1..n (agents)"]
+        ANS["Ansible"] -->|"installs K3s, Cilium, bootstraps Flux"| VMs
     end
-
-    subgraph IaC ["IaC & Bootstrapping Pipeline"]
-        TF["Terraform (libvirt provider)"]
-        Ansible["Ansible Playbooks"]
-        TF -->|"Provisions bridged VMs"| Host
-        Ansible -->|"Bootstraps K3s & Cilium"| Host
-    end
-
-    subgraph Cluster ["K3s Kubernetes Cluster"]
-        Cilium["Cilium CNI & L2 Load Balancer"]
-        Flux["FluxCD GitOps Engine"]
-        Storage["NFS Subdir Provisioner"]
-        Kyverno["Kyverno Policy Engine"]
-        Cloudflare["Cloudflare Tunnel (cloudflared)"]
-    end
-
-    subgraph Apps ["Workloads & Services"]
-        Jellyfin["Jellyfin (Media Server)"]
-        SilverBullet["SilverBullet (Notes)"]
-        Karakeep["Karakeep (Bookmarks + Search)"]
-    end
-
-    subgraph Observability ["Monitoring Stack"]
-        Prom["Prometheus"]
-        Graf["Grafana"]
-        Alert["AlertManager"]
-        KSM["kube-state-metrics"]
-        NodeExp["node-exporter"]
-    end
-
-    WS -->|"make apply && make provision"| IaC
-    IaC --> Cluster
-    Flux -->|"Reconciles manifests"| Cluster
-    Flux --> Apps
-    Flux --> Observability
-    Storage -->|"NFS persistent volumes"| NAS
-    Cloudflare -->|"Secure ingress (*.utkdwivedi.com)"| Apps
-    Cloudflare -->|"Secure ingress"| Graf
+    VMs --> Flux["Flux controllers"]
+    GIT[("This repository")] -->|"reconciles"| Flux
+    Flux --> INFRA["infrastructure/"]
+    Flux --> MON["monitoring/"]
+    Flux --> POL["policies/"]
+    Flux --> SVC["services/"]
+    INFRA -->|"NFS PVs"| NAS[("TrueNAS NFS")]
+    CF["Cloudflare Tunnel"] --> SVC
+    CF --> MON
 ```
 
----
+`clusters/<env>` holds the Flux entry points. `infrastructure` is reconciled first; `monitoring`, `policies` and `services` depend on it.
 
-## Setup & Deployment
-
-### Prerequisites
-
-| Item | Default Value | Description |
-|------|---------------|-------------|
-| **Production Host IP** | `192.168.0.111` | Primary Fedora virtualization host |
-| **Staging Host IP** | `192.168.0.109` | Optional staging virtualization host |
-| **NAS Storage IP** | `192.168.0.104` | NFS server hosting persistent volume shares |
-| **Cilium LB IP Pool** | `192.168.0.200/29` | IP range allocated for cluster load balancers |
-
-> [!NOTE]
-> If your local network configuration differs, adjust the IPs in `Makefile`, `scripts/env.sh`, and `provisioning/terraform/*/variables.tf`.
-
-1. **Prepare Fedora Host:**
-   - Fresh install of Fedora Server or Workstation.
-   - Connected via Ethernet (required for NetworkManager `br0` bridge).
-   - Ensure hardware virtualization (VT-x / AMD-V) is enabled in BIOS.
-   - Add your workstation SSH key to `~/.ssh/authorized_keys`.
-
-2. **Configure Terraform Variables:**
-   Create `terraform.tfvars` under `provisioning/terraform/production` (and `staging/` if using dual environments):
-   ```hcl
-   # Credentials
-   server_password = "YOUR_VM_PASSWORD"
-   ssh_keys = [
-     "YOUR_PUBLIC_SSH_KEY"
-   ]
-
-   # Node Specifications
-   node_count    = 3
-   vm_memory     = "4096"
-   vm_vcpu       = 2
-   user_name     = "server"
-   hostname_base = "k3s-node"
-   env           = "production"
-   host_ip       = "192.168.0.111"
-   ```
-
-3. **Ansible Secrets & SOPS Key:**
-   - Ensure an age keypair is generated: `age-keygen -o key.txt`
-   - Place public key in `.sops.yaml`.
-   - Store the age private key and your GitHub PAT in Ansible Vault (`provisioning/ansible/inventory/group_vars/all/secrets.yml`).
-
-4. **Execute Provisioning Pipeline:**
-   ```bash
-   source scripts/env.sh   # Sets up environment variables and SSH agent
-
-   make provision-host     # Configures KVM/libvirt, bridge (br0), and base packages
-   make apply              # Deploys VMs using Terraform
-   make provision          # Bootstraps K3s, Cilium CNI, and FluxCD
-   ```
-
-5. **External Ingress via Cloudflare Tunnel:**
-   Services are exposed securely using Cloudflare Zero-Trust Tunnel (no open inbound router ports required):
-   - Create a tunnel in Cloudflare Zero Trust Dashboard.
-   - Add the tunnel token into `infrastructure/base/networking/secret.sops.yaml` using SOPS.
-   - Point your domain CNAMEs to `<tunnel-id>.cfargotunnel.com`.
-
----
-
-## Repository Structure
+## Repository layout
 
 ```
 .
-├── clusters/                # FluxCD GitOps entrypoints
-│   ├── production/          # Production cluster kustomizations
-│   └── staging/             # Staging cluster kustomizations
-├── infrastructure/          # Core Kubernetes infrastructure
-│   ├── base/                # Base manifests
-│   │   ├── kyverno/         # Policy engine deployment
-│   │   ├── namespaces/      # Cluster namespaces
-│   │   ├── networking/      # Cilium IP pool, L2 policies, Cloudflare Tunnel
-│   │   └── storage/         # NFS subdir external provisioner & StorageClasses
-│   ├── production/          # Environment overlays
-│   └── staging/
-├── monitoring/              # Observability stack
-│   ├── base/
-│   │   ├── alertmanager/    # Alert routing
-│   │   ├── grafana/         # Dashboards and visualization
-│   │   ├── kube-state-metrics/
-│   │   ├── node-exporter/   # Host metrics collector
-│   │   └── prometheus/      # Metrics engine and storage
-│   ├── production/
-│   └── staging/
-├── policies/                # Kyverno validation and governance policies
-│   ├── base/
-│   ├── production/
-│   └── staging/
-├── provisioning/            # Infrastructure as Code
-│   ├── terraform/           # Libvirt/QEMU VM provisioning modules
-│   └── ansible/             # Host and node configuration playbooks
-├── resources/               # Dashboard templates & static assets
-├── scripts/                 # Shell automation and environment helpers
-├── services/                # Application workloads
-│   ├── base/
-│   │   ├── jellyfin/        # Media streaming
-│   │   ├── karakeep/        # Bookmark manager with search & headless browser
-│   │   └── silverbullet/    # Extensible markdown notebook
-│   ├── production/
-│   └── staging/
-├── Makefile                 # Top-level orchestration
-└── LICENSE                  # MIT License
+├── clusters/{production,staging}/   Flux entry points (flux-system + one Kustomization per area)
+├── infrastructure/{base,production,staging}/   namespaces, storage, networking, kyverno
+├── monitoring/{base,production,staging}/       prometheus, alertmanager, grafana, exporters
+├── policies/{base,production,staging}/         Kyverno policies
+├── services/{base,production,staging}/         jellyfin, karakeep, silverbullet
+├── provisioning/
+│   ├── terraform/{modules/k3s-vms,production,staging}/
+│   └── ansible/{playbooks,roles,inventory}/
+├── config/{production,staging}.env  per-environment values (host IPs) read by make and scripts
+├── scripts/                         env.sh, validate.sh, check-sops.sh, check_kustomize_refs.py
+├── docs/                            bootstrap, secrets, disaster recovery, adding a service
+├── resources/                       Grafana dashboard JSON
+└── Makefile                         `make` lists every target
 ```
 
----
+Each `base/` holds the manifests; `production/` and `staging/` are thin overlays that select what each environment runs.
 
-## Tooling overview
+## Quick start
 
-### Hardware
-| Logo | Device | Role |
-|:-:|-----|-------------|
-| ![Lenovo](https://cdn.simpleicons.org/lenovo?size=32) | Lenovo Thinkpad T14 Gen 1 | Production |
-| ![Lenovo](https://cdn.simpleicons.org/lenovo?size=32) | Lenovo Thinkcentre M700 | Staging |
-| ![HP](https://cdn.simpleicons.org/hp?size=32) | HP EliteDesk 800 G2 SFF 2x1TB WD Red | NAS |
-| ![Lenovo](https://cdn.simpleicons.org/lenovo?size=32) | Lenovo Legion 5 Slim | Workstation |
+Full walk-through: [docs/bootstrap.md](docs/bootstrap.md). In short:
 
-### Infrastructure
-| Logo | Name | Description |
-|:-:|-----|-------------|
-| ![Fedora](https://cdn.simpleicons.org/fedora?size=32) | Fedora | Linux Distribution used on Host, VMs and Workstation |
-| ![TrueNAS](https://cdn.simpleicons.org/truenas?size=32) | TrueNAS | Open-source unified storage operating system based on OpenZFS |
-| ![QEMU](https://cdn.simpleicons.org/qemu?size=32) | QEMU/KVM | Hypervisor for running virtual machines |
-| ![K3s](https://cdn.simpleicons.org/k3s?size=32) | K3s | Lightweight Kubernetes engine |
-| ![FluxCD](https://cdn.simpleicons.org/flux?size=32) | FluxCD | GitOps tool for managing Kubernetes declaratively |
-| ![Terraform](https://cdn.simpleicons.org/terraform?size=32) | Terraform | IaC tool for provisioning infrastructure declaratively |
-| ![Ansible](https://cdn.simpleicons.org/ansible/f00?size=32) | Ansible | Automation tool for post-provisioning configuration and orchestration |
-| ![SOPS](https://cdn.simpleicons.org/privateinternetaccess/000?size=32) | SOPS | Secret OPerationS - tool for managing secrets |
-| ![Cilium](https://cdn.simpleicons.org/cilium/size=32) | Cilium | Solution for providing, securing, and observing network connectivity |
-| <img src="https://raw.githubusercontent.com/kyverno/artwork/5be18d691ae2b42beb898ffc1312024975749bd8/Kyverno.svg" width="32" height="32" /> | Kyverno | Unified Policy as Code solution |
-| <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/cloudflare-zero-trust.png" width="32" height="32" />  | Cloudflare | Zero-Trust Tunnel for exposing services securely on a the internet |
+```bash
+# Tools: terraform, ansible, kubectl, sops, age, make (see .tool-versions)
+make deps                                  # install Ansible collections
+cp provisioning/terraform/production/terraform.tfvars.example provisioning/terraform/production/terraform.tfvars
+$EDITOR provisioning/terraform/production/terraform.tfvars config/production.env
 
+source scripts/env.sh production           # SSH agent, ANSIBLE_*, KUBECONFIG
+make provision-host                        # KVM, bridge br0, Tailscale on the Fedora host
+make init apply                            # create the VMs
+make wait-vms provision                    # K3s, Cilium, then Flux takes over
+make flux-status
+```
 
+Adjust the addresses in `config/<env>.env`, the Ansible inventories under `provisioning/ansible/inventory/` and `infrastructure/base/storage/` for your network. Values in this README (`192.168.x.x`) are placeholders.
 
-### Monitoring
-| Logo | Name | Description |
-|:-:|-----|-------------|
-| ![Prometheus](https://cdn.simpleicons.org/prometheus?size=32) | Prometheus | Scrapes infrastructure metrics for visualization in Grafana |
-| ![AlertManager](https://cdn.simpleicons.org/prometheus/f51d1d?size=32) | AlertManager | Sends notifications and alerts based on Prometheus metrics |
-| ![Grafana](https://cdn.simpleicons.org/grafana?size=32) | Grafana | Dashboard and visualization for metrics collected by Prometheus |
-| ![kube-state-metrics](https://cdn.simpleicons.org/cncf/5EC5EB?size=32) | kube-state-metrics | Exposes Kubernetes cluster-level metrics for Prometheus |
-| ![node-exporter](https://cdn.simpleicons.org/prometheus?size=32) | node-exporter | Collects host-level metrics for Prometheus |
-| ![K9s](https://cdn.simpleicons.org/kubernetes?size=32) | k9s | CLI tool to interactively view Kubernetes resources |
-| ![K9s](https://cdn.simpleicons.org/uptimekuma?size=32) | Uptime Kuma | Alternative monitoring running as TrueNAS App |
+## Day-to-day
 
-### Services
-| Logo | Name | Description |
-|:-:|-----|-------------|
-| ![Jellyfin](https://cdn.simpleicons.org/jellyfin?size=32) | Jellyfin | Media streaming service | 
-| <img src="https://repository-images.githubusercontent.com/459944886/a6e61d23-9090-4cc4-946d-c5d9c189240f" width="32" height="32" /> | SilverBullet.md | Programmable browser-based Markdown editor |
-| ![Karakeep](https://cdn.simpleicons.org/karakeep?size=32) | Karakeep | Bookmark manager | 
+| Task | Command |
+| --- | --- |
+| List all targets | `make` |
+| Validate before pushing | `make lint validate check-secrets` (CI runs the same) |
+| Rebuild a whole environment | `make rebuild ENV=staging CONFIRM=staging` |
+| Edit bootstrap secrets | `make edit-vault` |
+| Add a new app | [docs/adding-a-service.md](docs/adding-a-service.md) |
 
+Destructive targets refuse to run without `CONFIRM=<env>`.
 
-### Backup Strategy
+## Secrets
 
-The homelab follows a **3-2-1 backup strategy**:
+Kubernetes secrets are committed only as `*.sops.yaml`, encrypted to the age key in `.sops.yaml`. Flux decrypts them with the `sops-age` secret created during bootstrap. Never commit kubeconfigs, `.vault_pass`, `*.tfvars` or age private keys (all gitignored). Details and rotation steps: [docs/secrets.md](docs/secrets.md).
 
-| Logo | Name | Description |
-|:-:|-----|-------------|
-| ![TrueNAS](https://cdn.simpleicons.org/truenas?size=32) | TrueNAS | Primary local storage - 2x 1TB WD Red ZFS mirror |
-| <img src="https://images.icon-icons.com/61/PNG/128/lightbrown_external_drive_usb_folder_12286.png" width="32" height="32" /> | External SSD | Secondary local copy for critical data |
-| ![Backblaze](https://cdn.simpleicons.org/backblaze?size=32) | Backblaze B2 | Offsite cloud storage via TrueNAS Cloud Sync |
+## Hardware
 
->[!TIP]
-> Infrastructure configs and other version-controlled assets also live on GitHub, adding a fourth copy for the most critical data.
+| Device | Role |
+| --- | --- |
+| Lenovo ThinkPad T14 Gen 1 | Production host (KVM) |
+| Lenovo ThinkCentre M700 | Staging host (KVM) |
+| HP EliteDesk 800 G2 SFF, 2x1TB WD Red | NAS (TrueNAS, ZFS mirror) |
+| Lenovo Legion 5 Slim | Admin workstation |
 
+## Backups
+
+3-2-1 for data: TrueNAS ZFS mirror (primary), an external SSD (second local copy) and Backblaze B2 through TrueNAS Cloud Sync (offsite). This covers data on the NAS. Cluster state is rebuilt from Git; see [docs/disaster-recovery.md](docs/disaster-recovery.md) for what is and is not backed up.
+
+## Known limitations and roadmap
+
+Being honest about gaps keeps them on the list:
+
+- [ ] All VMs of an environment run on one physical host, so there is no hardware high availability and a single K3s server.
+- [ ] Prometheus stores data on a node `hostPath`; move it to a PVC or add remote write.
+- [ ] Alertmanager has rules wired in but no notification receiver yet (see the comment in `monitoring/base/alertmanager/configmap.yaml`).
+- [ ] No log aggregation (Loki) or tracing.
+- [ ] No default-deny `NetworkPolicy` resources yet, although Cilium supports them.
+- [ ] Kyverno policies run in `Audit`; switch to `Enforce` once the audit reports are clean.
+- [ ] Some images still track `latest`/`release` tags; Renovate (`renovate.json`) is configured to pin digests once the Renovate app is installed on the repository.
+- [ ] Restore from backup has not been rehearsed end to end.
+
+## Acknowledgements
+
+Layout ideas were inspired by the wider homelab and Flux community, including [khuedoan/homelab](https://github.com/khuedoan/homelab).
 
 ## License
 
-Distributed under the MIT License. See [LICENSE](LICENSE) for full details.
+MIT, see [LICENSE](LICENSE).

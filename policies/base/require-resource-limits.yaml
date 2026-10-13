@@ -23,5 +23,5 @@ spec:
           has(c.resources.limits.memory)
         )
       messageExpression: >-
-        "Pod " + object.metadata.name + " has containers missing CPU or memory limits"
-      message: All containers must have CPU and memory limits set.
+        "Pod " + object.metadata.name + " has containers without a memory limit"
+      message: All containers must set a memory limit (CPU limits are intentionally forbidden, see forbid-cpu-limits).

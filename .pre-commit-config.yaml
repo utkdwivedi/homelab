@@ -1,0 +1,40 @@
+# Install once: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+        exclude: ^clusters/.*/gotk-components\.yaml$
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+        exclude: ^clusters/.*/gotk-components\.yaml$
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+  - repo: local
+    hooks:
+      - id: yamllint
+        name: yamllint
+        entry: yamllint
+        language: system
+        types: [yaml]
+      - id: kustomize-refs
+        name: kustomize references exist
+        entry: python3 scripts/check_kustomize_refs.py
+        language: system
+        pass_filenames: false
+      - id: sops-encrypted
+        name: secrets are encrypted
+        entry: scripts/check-sops.sh
+        language: system
+        pass_filenames: false
+      - id: terraform-fmt
+        name: terraform fmt
+        entry: terraform fmt -check -recursive provisioning/terraform
+        language: system
+        pass_filenames: false
+        files: \.tf$

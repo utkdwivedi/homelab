@@ -1,0 +1,108 @@
+---
+# Bootstraps Flux from the manifests committed in clusters/<env>/flux-system.
+# After this, Flux manages itself from Git. Secrets are passed through the
+# environment so they never appear in a process list or in Ansible output.
+- name: Check whether Flux is already installed
+  ansible.builtin.command: kubectl get deployment source-controller --namespace flux-system
+  environment:
+    KUBECONFIG: "{{ flux_kubeconfig }}"
+  register: flux_check
+  failed_when: false
+  changed_when: false
+
+- name: Bootstrap Flux
+  when: flux_check.rc != 0
+  block:
+    - name: Create the flux-system namespace
+      ansible.builtin.shell: |
+        set -o pipefail
+        kubectl create namespace flux-system --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG: "{{ flux_kubeconfig }}"
+      changed_when: true
+
+    - name: Create the Git credentials secret
+      ansible.builtin.shell: |
+        set -o pipefail
+        kubectl create secret generic flux-system \
+          --namespace=flux-system \
+          --from-literal=username="$FLUX_GIT_USERNAME" \
+          --from-literal=password="$FLUX_GIT_TOKEN" \
+          --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG: "{{ flux_kubeconfig }}"
+        FLUX_GIT_USERNAME: "{{ flux_github_username }}"
+        FLUX_GIT_TOKEN: "{{ vault_github_token }}"
+      no_log: true
+      changed_when: true
+
+    - name: Create the SOPS age secret
+      ansible.builtin.shell: |
+        set -o pipefail
+        kubectl create secret generic sops-age \
+          --namespace=flux-system \
+          --from-literal=age.agekey="$SOPS_AGE_KEY" \
+          --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
+      environment:
+        KUBECONFIG: "{{ flux_kubeconfig }}"
+        SOPS_AGE_KEY: "{{ sops_age_private_key }}"
+      no_log: true
+      changed_when: true
+
+    - name: Create the staging directory for Flux manifests
+      ansible.builtin.file:
+        path: "{{ flux_remote_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Copy Flux manifests from the repository checkout
+      ansible.builtin.copy:
+        src: "{{ flux_manifests_dir }}/{{ item }}"
+        dest: "{{ flux_remote_dir }}/{{ item }}"
+        mode: "0600"
+      loop:
+        - gotk-components.yaml
+        - gotk-sync.yaml
+
+    - name: Install the Flux controllers and CRDs
+      ansible.builtin.command: kubectl apply --server-side --force-conflicts -f {{ flux_remote_dir }}/gotk-components.yaml
+      environment:
+        KUBECONFIG: "{{ flux_kubeconfig }}"
+      changed_when: true
+
+    - name: Wait for the Flux CRDs
+      ansible.builtin.command: >-
+        kubectl wait --for=condition=Established --timeout=120s
+        crd/gitrepositories.source.toolkit.fluxcd.io
+        crd/kustomizations.kustomize.toolkit.fluxcd.io
+      environment:
+        KUBECONFIG: "{{ flux_kubeconfig }}"
+      changed_when: false
+
+    - name: Wait for the Flux controllers
+      ansible.builtin.command: >-
+        kubectl wait --for=condition=Available --timeout=300s
+        deployment --all --namespace flux-system
+      environment:
+        KUBECONFIG: "{{ flux_kubeconfig }}"
+      changed_when: false
+
+    - name: Point Flux at this repository
+      ansible.builtin.command: kubectl apply -f {{ flux_remote_dir }}/gotk-sync.yaml
+      environment:
+        KUBECONFIG: "{{ flux_kubeconfig }}"
+      changed_when: true
+
+    - name: Ask Flux to reconcile now
+      ansible.builtin.shell: |
+        kubectl annotate --overwrite gitrepository/flux-system --namespace flux-system \
+          reconcile.fluxcd.io/requestedAt="$(date +%s)"
+      environment:
+        KUBECONFIG: "{{ flux_kubeconfig }}"
+      changed_when: true

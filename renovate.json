@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "docker:pinDigests", ":semanticCommits"],
+  "timezone": "Asia/Kolkata",
+  "schedule": ["before 6am on saturday"],
+  "flux": {
+    "managerFilePatterns": ["/^(clusters|infrastructure|monitoring|services)\\/.+\\.ya?ml$/"]
+  },
+  "kubernetes": {
+    "managerFilePatterns": ["/^(infrastructure|monitoring|services)\\/.+\\.ya?ml$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Cilium chart version used by the Ansible role",
+      "managerFilePatterns": ["/^provisioning\\/ansible\\/inventory\\/group_vars\\/all\\/defaults\\.yaml$/"],
+      "matchStrings": ["cilium_chart_version:\\s*\"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "cilium",
+      "registryUrlTemplate": "https://helm.cilium.io",
+      "datasourceTemplate": "helm"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Group Flux controller updates",
+      "matchManagers": ["flux"],
+      "groupName": "flux"
+    },
+    {
+      "description": "Never auto-merge anything; this is infrastructure",
+      "matchPackageNames": ["*"],
+      "automerge": false
+    }
+  ]
+}
