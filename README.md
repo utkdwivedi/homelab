@@ -110,7 +110,7 @@ Kubernetes secrets are committed only as `*.sops.yaml`, encrypted to the age key
 
 ## Backups
 
-3-2-1 for data: TrueNAS ZFS mirror (primary), an external SSD (second local copy) and Backblaze B2 through TrueNAS Cloud Sync (offsite). This covers data on the NAS. Cluster state is rebuilt from Git; see [docs/disaster-recovery.md](docs/disaster-recovery.md) for what is and is not backed up.
+3-2-1 for data: TrueNAS ZFS mirror (primary), an external SSD (second local copy) and Backblaze B2 through TrueNAS Cloud Sync (offsite). This covers data on the NAS. Cluster state is rebuilt from Git, see [docs/disaster-recovery.md](docs/disaster-recovery.md) for what is and is not backed up.
 
 ## Known limitations and roadmap
 
