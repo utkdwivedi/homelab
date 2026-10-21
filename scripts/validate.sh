@@ -29,7 +29,7 @@ for dir in clusters/production clusters/staging \
     continue
   fi
   if command -v kubeconform > /dev/null; then
-    printf '%s\n' "$out" | kubeconform -strict -ignore-missing-schemas -summary -skip Secret \
+    printf '%s\n' "$out" | kubeconform -strict -ignore-missing-schemas -summary -skip Secret,v1/Secret \
       -schema-location default \
       -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' || status=1
   fi
